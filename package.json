@@ -1,0 +1,22 @@
+{
+  "name": "openserverless-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing OpenServerless action tools (new/invoke/requirements and service connectors)",
+  "type": "module",
+  "bin": {
+    "openserverless-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
