@@ -4,7 +4,7 @@ Rule: an action is stored folder `packages/<package>/<name>`, functions is a syn
 
 Rule: assume the packages referenced by the tools are already available and preinstalled.
 
-Rule: `action-add-secret`, `action-add-s3`, `action-add-redis`, `action-add-postgresql`, and `action-add-milvus` are idempotent — if the secret or service is already present in `__main__.py`, skip the injection silently and return a message saying it is already configured.
+Rule: `action-add-secret`, `action-add-s3`, `action-add-redis`, `action-add-postgresql`, `action-add-milvus`, and `action-add-mongodb` are idempotent — if the secret or service is already present in `__main__.py`, skip the injection silently and return a message saying it is already configured.
 
 Implement the following tools in folder tools/ using this template:
 
@@ -243,6 +243,36 @@ def init_milvus(args, ctx):
   db_name = args.get("MILVUS_DB_NAME", os.getenv("MILVUS_DB_NAME"))
   ctx.MILVUS = MilvusClient(uri=uri, token=token, db_name=db_name)
 builder.append(init_milvus)
+```
+
+## returns
+
+Information on the updated context.
+
+# tool action-add-mongodb
+
+## parameters
+
+Receive an <endpoint> (`name` or `package/name`).
+
+## generation
+
+This tool adds a MongoDB connection to an endpoint/action/function, making available:
+- `ctx.MONGODB_CLIENT` — the MongoClient instance
+- `ctx.MONGODB` — the default MongoDB database from the connection string
+
+- adds in `__main__.py` after "## build-context ##":
+
+```
+#--param MONGODB_URI "$MONGODB_URI"
+from pymongo import MongoClient
+def init_mongodb(args, ctx):
+  uri = args.get("MONGODB_URI", os.getenv("MONGODB_URI"))
+  if not uri:
+    raise RuntimeError("MONGODB_URI is not configured for this action")
+  ctx.MONGODB_CLIENT = MongoClient(uri)
+  ctx.MONGODB = ctx.MONGODB_CLIENT.get_default_database()
+builder.append(init_mongodb)
 ```
 
 ## returns

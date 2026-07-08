@@ -16,6 +16,7 @@ Model Context Protocol so any MCP-capable agent can drive them.
 | `action_add_postgresql` | Add PostgreSQL (`ctx.POSTGRESQL`). |
 | `action_add_redis` | Add Redis (`ctx.REDIS`, `ctx.REDIS_PREFIX`). |
 | `action_add_milvus` | Add Milvus vector DB (`ctx.MILVUS`). |
+| `action_add_mongodb` | Add MongoDB (`ctx.MONGODB_CLIENT`, `ctx.MONGODB`). |
 
 The `endpoint` argument is either `name` (uses the `v1` package) or `package/name`.
 
@@ -41,6 +42,7 @@ src/
     add-postgresql.ts action_add_postgresql
     add-redis.ts      action_add_redis
     add-milvus.ts     action_add_milvus
+    add-mongodb.ts    action_add_mongodb
 ```
 
 Each file under `tools/` default-exports a `Tool` (`defineTool({ name, config, handler })`);
