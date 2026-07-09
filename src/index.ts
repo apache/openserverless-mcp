@@ -28,6 +28,7 @@ import actionAddS3 from "./tools/add-s3.ts"
 import actionAddPostgresql from "./tools/add-postgresql.ts"
 import actionAddRedis from "./tools/add-redis.ts"
 import actionAddMilvus from "./tools/add-milvus.ts"
+import actionAddMongodb from "./tools/add-mongodb.ts"
 
 const tools: Tool[] = [
   actionNew,
@@ -38,6 +39,7 @@ const tools: Tool[] = [
   actionAddPostgresql,
   actionAddRedis,
   actionAddMilvus,
+  actionAddMongodb,
 ]
 
 const server = new McpServer({
