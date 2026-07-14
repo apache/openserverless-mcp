@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_postgresql",
@@ -28,7 +28,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param POSTGRES_URL "$POSTGRES_URL"
@@ -38,7 +38,7 @@ def init_postgresql(args, ctx):
   ctx.POSTGRESQL = psycopg.connect(dburl)
 builder.append(init_postgresql)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "PostgreSQL",

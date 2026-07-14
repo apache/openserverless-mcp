@@ -29,6 +29,10 @@ import actionAddPostgresql from "./tools/add-postgresql.ts"
 import actionAddRedis from "./tools/add-redis.ts"
 import actionAddMilvus from "./tools/add-milvus.ts"
 import actionAddMongodb from "./tools/add-mongodb.ts"
+import secretEnsure from "./tools/secret-ensure.ts"
+import secretStatus from "./tools/secret-status.ts"
+import secretBind from "./tools/secret-bind.ts"
+import authSetup from "./tools/auth-setup.ts"
 
 const tools: Tool[] = [
   actionNew,
@@ -40,6 +44,10 @@ const tools: Tool[] = [
   actionAddRedis,
   actionAddMilvus,
   actionAddMongodb,
+  secretEnsure,
+  secretStatus,
+  secretBind,
+  authSetup,
 ]
 
 const server = new McpServer({

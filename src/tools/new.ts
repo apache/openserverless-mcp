@@ -15,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { mkdirSync, writeFileSync, existsSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { z } from "zod"
-import { parseEndpoint, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, error, text, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_new",
@@ -37,23 +37,35 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const { pkg, name, dir } = ep
 
     const validPattern = /^[a-zA-Z][a-zA-Z0-9-]*$/
     if (!validPattern.test(pkg)) {
-      return text(`Error: package '${pkg}' must only contain letters, numbers, '-' and start with a letter`)
+      return error(`Error: package '${pkg}' must only contain letters, numbers, '-' and start with a letter`)
     }
     if (!validPattern.test(name)) {
-      return text(`Error: name '${name}' must only contain letters, numbers, '-' and start with a letter`)
+      return error(`Error: name '${name}' must only contain letters, numbers, '-' and start with a letter`)
     }
 
     const isPublic = isPublicArg !== false
     const moduleName = name.replace(/-/g, "_")
 
     if (existsSync(dir)) {
-      return text(`Error: endpoint already exists at ${dir}`)
+      if (!existsSync(ep.mainPath)) {
+        return error(`Error: path already exists at ${dir}, but it is not a valid endpoint (__main__.py is missing)`)
+      }
+
+      const existingMain = readFileSync(ep.mainPath, "utf-8")
+      const existingPublic = existingMain.match(/^#--web\s+(true|false)\s*$/m)?.[1]
+      if (existingPublic !== undefined && existingPublic !== String(isPublic)) {
+        return error(
+          `Error: endpoint already exists at ${dir} with public=${existingPublic}; requested public=${isPublic}`,
+        )
+      }
+
+      return text(`Check passed: endpoint already exists at ${dir}; no changes made.`)
     }
 
     mkdirSync(dir, { recursive: true })

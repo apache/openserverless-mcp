@@ -16,26 +16,27 @@
 // under the License.
 
 import { z } from "zod"
-import { error, text, defineTool, endpointArg } from "../lib.ts"
+import { defineTool, endpointArg, error, text } from "../lib.ts"
 import { bindSecret, normalizeSecretName } from "../secrets.ts"
 
 export default defineTool({
-  name: "action_add_secret",
+  name: "secret_bind",
   config: {
-    description: "Add a secret to an endpoint's context. The secret must exist in .env.",
+    description: "Atomically bind one existing .env secret to multiple OpenServerless endpoints as ctx.<SECRET>.",
     inputSchema: {
-      endpoint: endpointArg,
-      secret: z.string().describe("The secret name (e.g. MY_SECRET)"),
+      secret: z.string().describe("The secret name (e.g. JWT_SECRET)"),
+      endpoints: z.array(endpointArg).min(1).describe("Every endpoint that must receive the same secret"),
     },
   },
-  handler({ endpoint, secret }) {
+  handler({ secret, endpoints }) {
     try {
       const name = normalizeSecretName(secret)
-      const result = bindSecret(name, [endpoint])
-      const target = result.configured[0] ?? result.alreadyConfigured[0]
-      return text(result.configured.length > 0
-        ? `Added secret '${name}' to endpoint '${target}'. Available as ctx.${name}. The value was not returned.`
-        : `Secret '${name}' is already configured in endpoint '${target}'. The value was not read or returned.`)
+      const result = bindSecret(name, endpoints)
+      const lines = [`Secret '${name}' binding completed without exposing its value.`]
+      if (result.configured.length > 0) lines.push(`Configured: ${result.configured.join(", ")}.`)
+      if (result.alreadyConfigured.length > 0) lines.push(`Already configured: ${result.alreadyConfigured.join(", ")}.`)
+      lines.push(`Use ctx.${name} in action code and fail closed if it is unavailable; never use a hardcoded fallback.`)
+      return text(lines.join("\n"))
     } catch (cause) {
       return error(`Secret binding failed: ${(cause as Error).message}`)
     }

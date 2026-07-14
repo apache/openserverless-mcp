@@ -77,7 +77,10 @@ def main(args, ctx=None):
 
 ## returns
 
-The resulting `<package>/<name>`.
+The resulting `<package>/<name>`. Creation is idempotent: when a compatible
+endpoint with `__main__.py` already exists, leave every file unchanged and
+return a successful check/no-op result. An existing incomplete path or an
+explicit `public` mismatch is a conflict and returns `isError: true`.
 
 # tool action-invoke
 
@@ -105,18 +108,68 @@ Receive an <endpoint> (`name` or `package/name`) and a <secret> name.
 
 This tool adds a new secret <MY_SECRET> to an endpoint/action/function.
 
-First checks the secret is available in `.env`. If not, warn the user and suggest to add it to the environment.
+First checks the secret is available in `.env`. If it is absent, return an MCP
+error with `isError: true` and do not modify the endpoint.
 
 - adds in `__main__.py` after "## build-context ##":
 
 ```
 #--param <MY_SECRET> "$<MY_SECRET>"
-builder.append(lambda args, ctx: setattr(ctx, '<MY_SECRET>', args.get("<MY_SECRET>", os.getenv("<MY_SECRET>"))))
+def init_<my_secret>(args, ctx):
+  value = args.get("<MY_SECRET>") or os.getenv("<MY_SECRET>")
+  if not value:
+    raise RuntimeError("Required secret <MY_SECRET> is not configured")
+  setattr(ctx, "<MY_SECRET>", value)
+builder.append(init_<my_secret>)
 ```
 
 ## returns
 
 Information on the updated context.
+
+# tool secret-status
+
+Receive a secret name and an optional endpoint list. Report only whether the
+name exists in `.env` and whether each generated wrapper contains the matching
+parameter binding. Never read or return the value.
+
+# tool secret-ensure
+
+Receive an authorized exact secret name and optional random byte count. If the
+name is absent, append a cryptographically random base64url value to `.env`.
+If it already exists, leave it unchanged. Never return either an existing or a
+new value.
+
+When `OPENSERVERLESS_SECRETS_FILE` is configured, synchronize only the requested
+name with that persistent env file. Prefer an existing persistent value, copy an
+existing `.env` value into the persistent file when no persistent value exists,
+and generate only when both are absent.
+
+# tool secret-bind
+
+Receive a secret name and a non-empty endpoint list. Validate the secret and
+every wrapper before writing anything, then add the same strict `ctx.<SECRET>`
+binding to every endpoint. The operation is idempotent and must not leave only
+some endpoints configured when validation fails.
+
+# tool auth-setup
+
+Receive a secret name, token-issuing endpoints, protected endpoints, and an
+optional `generate_if_missing` flag. Ensure every action that creates or
+validates authentication tokens receives the same secret. If generation is
+requested, create the value without exposing it. The returned contract must
+tell action code to use only `ctx.<SECRET>` and to fail closed instead of using
+an environment or hardcoded fallback.
+
+# MCP error semantics
+
+Validation failures, missing files, failed child commands, and missing required
+secrets return `isError: true`. Human-readable text beginning with `Error:` or
+`Warning:` is not a substitute for MCP failure status.
+
+Expected idempotent no-ops, including creating an endpoint that is already
+present with compatible visibility, return normal successful results so MCP
+clients render them as completed checks rather than failures.
 
 # tool action-add-s3
 

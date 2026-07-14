@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { z } from "zod"
-import { parseEndpoint, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, error, text, defineTool, endpointArg } from "../lib.ts"
 
 const PREINSTALLED = [
   "requests", "ollama", "openai", "pymilvus", "redis", "pyyaml", "boto3",
@@ -42,13 +42,13 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const lib = library.trim()
     const { dir } = ep
 
     if (!existsSync(dir)) {
-      return text(`Error: endpoint not found at ${dir}`)
+      return error(`Error: endpoint not found at ${dir}`)
     }
 
     const normalizedLib = lib.toLowerCase().replace(/-/g, "_")

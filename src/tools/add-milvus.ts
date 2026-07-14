@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_milvus",
@@ -28,7 +28,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param MILVUS_HOST "$MILVUS_HOST"
@@ -45,7 +45,7 @@ def init_milvus(args, ctx):
   ctx.MILVUS = MilvusClient(uri=uri, token=token, db_name=db_name)
 builder.append(init_milvus)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "Milvus",

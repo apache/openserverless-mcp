@@ -30,6 +30,7 @@ export const endpointArg = z
 export interface ToolResult {
   [x: string]: unknown
   content: { type: "text"; text: string }[]
+  isError?: boolean
 }
 
 /**
@@ -82,6 +83,19 @@ export function parseEndpoint(endpoint: string): Endpoint {
 /** A single MCP text tool result. */
 export function text(message: string) {
   return { content: [{ type: "text" as const, text: message }] }
+}
+
+/** A failed MCP tool result. Clients must not treat this as a completed call. */
+export function error(message: string) {
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: message }],
+  }
+}
+
+/** Convert the status string returned by shared helpers into an MCP result. */
+export function status(message: string) {
+  return message.startsWith("Error:") ? error(message) : text(message)
 }
 
 /**

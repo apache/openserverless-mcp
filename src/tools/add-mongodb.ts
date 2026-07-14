@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_mongodb",
@@ -28,7 +28,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param MONGODB_URI "$MONGODB_URI"
@@ -41,7 +41,7 @@ def init_mongodb(args, ctx):
   ctx.MONGODB = ctx.MONGODB_CLIENT.get_default_database()
 builder.append(init_mongodb)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "MongoDB",

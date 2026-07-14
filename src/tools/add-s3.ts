@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_s3",
@@ -28,7 +28,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param S3_HOST "$S3_HOST"
@@ -53,7 +53,7 @@ def init_s3(args, ctx):
   ctx.S3_PUBLIC = args.get("S3_PUBLIC", os.getenv("OPSDEV_S3"))
 builder.append(init_s3)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "S3",

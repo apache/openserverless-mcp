@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_redis",
@@ -28,7 +28,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param REDIS_URL "$REDIS_URL"
@@ -39,7 +39,7 @@ def init_redis(args, ctx):
   ctx.REDIS_PREFIX = args.get("REDIS_PREFIX", os.getenv("REDIS_PREFIX"))
 builder.append(init_redis)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "Redis",
