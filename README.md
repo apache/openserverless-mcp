@@ -23,7 +23,11 @@ Model Context Protocol so any MCP-capable agent can drive them.
 | `action_add_milvus` | Add Milvus vector DB (`ctx.MILVUS`). |
 | `action_add_mongodb` | Add MongoDB (`ctx.MONGODB_CLIENT`, `ctx.MONGODB`). |
 
-The `endpoint` argument is either `name` (uses the `v1` package) or `package/name`.
+The `endpoint` argument is either `name` (uses the `v1` package) or
+`package/name`. Both segments must start with a letter and contain only letters,
+numbers, and hyphens. Use flat hyphenated names such as
+`v1/employees-photo`; underscores, spaces, nested routes, and forms such as
+`v1/employees_photo` or `v1/employees/photo` are invalid.
 Repeating `action_new` for a compatible existing endpoint is a successful check
 that leaves its files unchanged; incomplete paths and visibility conflicts are
 reported as MCP errors.

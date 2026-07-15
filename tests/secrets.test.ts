@@ -24,6 +24,7 @@ import actionAddS3 from "../src/tools/add-s3.ts"
 import actionAddSecret from "../src/tools/add-secret.ts"
 import actionAddRedis from "../src/tools/add-redis.ts"
 import actionNew from "../src/tools/new.ts"
+import { endpointArg, parseEndpoint } from "../src/lib.ts"
 import authSetup from "../src/tools/auth-setup.ts"
 import secretBind from "../src/tools/secret-bind.ts"
 import secretEnsure from "../src/tools/secret-ensure.ts"
@@ -258,6 +259,26 @@ test("action_new treats an existing compatible endpoint as a successful no-op", 
     assert.equal(repeated.isError, undefined)
     assert.match(resultText(repeated), /Check passed: endpoint already exists/)
     assert.equal(readFileSync(modulePath, "utf-8"), "# user implementation\n")
+  })
+})
+
+test("action tools reject underscore endpoint names with a hyphenated suggestion", () => {
+  assert.equal(endpointArg.safeParse("v1/employees-photo").success, true)
+  const invalidSchema = endpointArg.safeParse("v1/employees_photo")
+  assert.equal(invalidSchema.success, false)
+  if (!invalidSchema.success) {
+    assert.match(invalidSchema.error.issues[0].message, /underscores and spaces are invalid/)
+  }
+  assert.throws(() => parseEndpoint("v1/employees_photo"), /Did you mean 'v1\/employees-photo'/)
+
+  inTemporaryProject(() => {
+    const creation = actionNew.handler({ endpoint: "v1/employees_photo", public: true })
+    assert.equal(creation.isError, true)
+    assert.match(resultText(creation), /Did you mean 'v1\/employees-photo'/)
+
+    const connector = actionAddS3.handler({ endpoint: "v1/employees_photo" })
+    assert.equal(connector.isError, true)
+    assert.match(resultText(connector), /Did you mean 'v1\/employees-photo'/)
   })
 })
 

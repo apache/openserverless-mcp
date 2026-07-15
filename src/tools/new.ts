@@ -41,14 +41,6 @@ export default defineTool({
     }
     const { pkg, name, dir } = ep
 
-    const validPattern = /^[a-zA-Z][a-zA-Z0-9-]*$/
-    if (!validPattern.test(pkg)) {
-      return error(`Error: package '${pkg}' must only contain letters, numbers, '-' and start with a letter`)
-    }
-    if (!validPattern.test(name)) {
-      return error(`Error: name '${name}' must only contain letters, numbers, '-' and start with a letter`)
-    }
-
     const isPublic = isPublicArg !== false
     const moduleName = name.replace(/-/g, "_")
 
