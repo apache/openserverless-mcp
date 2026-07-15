@@ -15,7 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import { readFileSync, writeFileSync } from "node:fs"
 import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
+import { ensurePythonRequirement } from "./requirements.ts"
+
+const LEGACY_CLIENT = 'redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")))'
+const TEXT_CLIENT = 'redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")), decode_responses=True)'
 
 export default defineTool({
   name: "action_add_redis",
@@ -35,18 +40,26 @@ export default defineTool({
 #--param REDIS_PREFIX "$REDIS_PREFIX"
 import redis
 def init_redis(args, ctx):
-  ctx.REDIS = redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")))
+  ctx.REDIS = redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")), decode_responses=True)
   ctx.REDIS_PREFIX = args.get("REDIS_PREFIX", os.getenv("REDIS_PREFIX"))
 builder.append(init_redis)`
 
-    return status(
-      injectConnector({
-        endpoint: ep,
-        label: "Redis",
-        guard: "init_redis",
-        injection,
-        available: "  ctx.REDIS — the Redis client\n  ctx.REDIS_PREFIX — the key prefix",
-      }),
-    )
+    const connector = injectConnector({
+      endpoint: ep,
+      label: "Redis",
+      guard: "init_redis",
+      injection,
+      available: "  ctx.REDIS — the Redis client\n  ctx.REDIS_PREFIX — the key prefix",
+    })
+    if (connector.startsWith("Error:")) return status(connector)
+
+    const wrapper = readFileSync(ep.mainPath, "utf-8")
+    if (wrapper.includes(LEGACY_CLIENT)) {
+      writeFileSync(ep.mainPath, wrapper.replace(LEGACY_CLIENT, TEXT_CLIENT))
+    }
+
+    const requirement = ensurePythonRequirement(ep.dir, "redis")
+    if (requirement.startsWith("Error:")) return status(requirement)
+    return status(`${connector}\n${requirement}`)
   },
 })

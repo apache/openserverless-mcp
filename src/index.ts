@@ -32,6 +32,7 @@ import actionAddMongodb from "./tools/add-mongodb.ts"
 import secretEnsure from "./tools/secret-ensure.ts"
 import secretStatus from "./tools/secret-status.ts"
 import secretBind from "./tools/secret-bind.ts"
+import secretUnbind from "./tools/secret-unbind.ts"
 import authSetup from "./tools/auth-setup.ts"
 
 const tools: Tool[] = [
@@ -47,6 +48,7 @@ const tools: Tool[] = [
   secretEnsure,
   secretStatus,
   secretBind,
+  secretUnbind,
   authSetup,
 ]
 

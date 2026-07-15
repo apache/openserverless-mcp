@@ -111,6 +111,12 @@ This tool adds a new secret <MY_SECRET> to an endpoint/action/function.
 First checks the secret is available in `.env`. If it is absent, return an MCP
 error with `isError: true` and do not modify the endpoint.
 
+Trustable-managed runtime variables are not application secrets and must be
+rejected even when they exist in `.env`: `OPS_USER`, `OPS_PASSWORD`,
+`OPS_APIHOST`, `OPS_REPO`, and `OPS_SKILLS`. In particular, the tool must never
+generate `#--param OPS_APIHOST "$OPS_APIHOST"`; `OPS_APIHOST` belongs to the
+Trustable/`ops ide` orchestration process, not to action runtime context.
+
 - adds in `__main__.py` after "## build-context ##":
 
 ```
@@ -152,6 +158,20 @@ every wrapper before writing anything, then add the same strict `ctx.<SECRET>`
 binding to every endpoint. The operation is idempotent and must not leave only
 some endpoints configured when validation fails.
 
+# tool secret-unbind
+
+Receive one bound parameter name and a non-empty endpoint list. Validate every
+generated wrapper before changing anything, then atomically remove only the
+exact binding block produced by the secret tools. Do not read or delete the
+value from `.env` or the persistent secret store. The operation is idempotent
+and is the supported recovery path for legacy invalid bindings of
+Trustable-managed variables such as `OPS_APIHOST`. When a binding is removed,
+the tool must instruct the caller to recreate every changed endpoint with
+`ops ide undeploy <endpoint>` followed by `ops ide deploy <endpoint>`, because
+updating an existing OpenWhisk action without the parameter does not remove the
+previously deployed binding. `ops ide clean` is insufficient because it removes
+only local build artifacts.
+
 # tool auth-setup
 
 Receive a secret name, token-issuing endpoints, protected endpoints, and an
@@ -184,6 +204,14 @@ This tool adds S3 to the context of an endpoint/action/function, making availabl
 - `ctx.S3_DATA` — the S3 data bucket (private)
 - `ctx.S3_WEB` — the S3 web bucket (public)
 - `ctx.S3_PUBLIC` — the public URL to access S3
+
+The generated credentials are scoped to the configured application buckets.
+Action code must never call `ctx.S3_CLIENT.list_buckets()`. Bucket listing,
+`head_bucket`, or object listing is not proof of read/write access. A service
+read/write check must create a unique temporary key in `ctx.S3_DATA` with
+`put_object`, read it with `get_object`, compare the returned body bytes, and
+remove it with `delete_object` in a `finally` block. It may report read/write
+success only after the comparison succeeds.
 
 - adds in `__main__.py` after "## build-context ##":
 
@@ -234,10 +262,16 @@ This tool adds a Redis connection to an endpoint/action/function, making availab
 #--param REDIS_PREFIX "$REDIS_PREFIX"
 import redis
 def init_redis(args, ctx):
-  ctx.REDIS = redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")))
+  ctx.REDIS = redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")), decode_responses=True)
   ctx.REDIS_PREFIX = args.get("REDIS_PREFIX", os.getenv("REDIS_PREFIX"))
 builder.append(init_redis)
 ```
+
+The tool must also add `redis` to the endpoint `requirements.txt`, because the
+default Python action runtime does not guarantee that client library. Repeated
+calls are idempotent and upgrade an existing generated Redis connector to
+`decode_responses=True` so action results contain JSON-safe strings rather than
+raw bytes.
 
 ## returns
 

@@ -15,10 +15,11 @@ Model Context Protocol so any MCP-capable agent can drive them.
 | `secret_status` | Check secret presence and endpoint bindings without reading its value. |
 | `secret_ensure` | Generate a missing `.env` secret without returning its value. |
 | `secret_bind` | Atomically bind the same secret to multiple endpoints. |
+| `secret_unbind` | Atomically remove an obsolete generated binding without reading or deleting the secret. |
 | `auth_setup` | Prepare one shared secret for token-issuing and protected endpoints. |
-| `action_add_s3` | Add S3 to an endpoint's context (`ctx.S3_CLIENT`, `ctx.S3_DATA`, `ctx.S3_WEB`, `ctx.S3_PUBLIC`). |
+| `action_add_s3` | Add bucket-scoped S3 to an endpoint's context (`ctx.S3_CLIENT`, `ctx.S3_DATA`, `ctx.S3_WEB`, `ctx.S3_PUBLIC`); forbids `list_buckets` and requires `put_object` → `get_object`/compare → `delete_object` for read/write verification. |
 | `action_add_postgresql` | Add PostgreSQL (`ctx.POSTGRESQL`). |
-| `action_add_redis` | Add Redis (`ctx.REDIS`, `ctx.REDIS_PREFIX`). |
+| `action_add_redis` | Add Redis (`ctx.REDIS`, `ctx.REDIS_PREFIX`) and its Python runtime dependency. |
 | `action_add_milvus` | Add Milvus vector DB (`ctx.MILVUS`). |
 | `action_add_mongodb` | Add MongoDB (`ctx.MONGODB_CLIENT`, `ctx.MONGODB`). |
 
@@ -66,6 +67,7 @@ src/
     secret-status.ts  secret_status
     secret-ensure.ts  secret_ensure
     secret-bind.ts    secret_bind
+    secret-unbind.ts  secret_unbind
     auth-setup.ts     auth_setup
 ```
 
