@@ -17,7 +17,7 @@
 
 import { execFile } from "node:child_process"
 import { z } from "zod"
-import { text, defineTool } from "../lib.ts"
+import { error, text, defineTool } from "../lib.ts"
 
 export default defineTool({
   name: "action_invoke",
@@ -37,7 +37,7 @@ export default defineTool({
       for (const kv of params) {
         const eqIdx = kv.indexOf("=")
         if (eqIdx === -1) {
-          return text(`Error: invalid parameter '${kv}', expected key=value format`)
+          return error(`Error: invalid parameter '${kv}', expected key=value format`)
         }
         paramArgs.push("-p", kv.substring(0, eqIdx), kv.substring(eqIdx + 1))
       }
@@ -60,6 +60,8 @@ export default defineTool({
     if (stdout) result += stdout
     if (stderr) result += `\nSTDERR:\n${stderr}`
     if (exitCode !== 0) result += `\nExit code: ${exitCode}`
-    return text(result || "(no output)")
+    return exitCode === 0
+      ? text(result || "(no output)")
+      : error(result || `ops action invoke failed with exit code ${exitCode}`)
   },
 })

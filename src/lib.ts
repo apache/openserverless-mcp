@@ -21,15 +21,23 @@ import { z, type ZodRawShape } from "zod"
 
 export const BUILD_CONTEXT_MARKER = "## build-context ##"
 
+const ACTION_SEGMENT = "[a-zA-Z][a-zA-Z0-9-]*"
+export const ENDPOINT_PATTERN = new RegExp(`^(?:${ACTION_SEGMENT})(?:/${ACTION_SEGMENT})?$`)
+const ENDPOINT_FORMAT =
+  "Use 'name' or 'package/name'. Each segment must start with a letter and contain only letters, numbers, and hyphens; underscores and spaces are invalid (example: 'v1/employees-photo')."
+
 /** Shared `endpoint` argument used by every action tool. */
 export const endpointArg = z
   .string()
-  .describe("The endpoint path: 'name' (uses v1 package) or 'package/name'")
+  .trim()
+  .regex(ENDPOINT_PATTERN, ENDPOINT_FORMAT)
+  .describe(`The action endpoint. ${ENDPOINT_FORMAT}`)
 
 /** Shape of a tool result returned to the MCP client. */
 export interface ToolResult {
   [x: string]: unknown
   content: { type: "text"; text: string }[]
+  isError?: boolean
 }
 
 /**
@@ -69,10 +77,16 @@ export interface Endpoint {
  * "package/name". Throws on malformed input (more than one "/").
  */
 export function parseEndpoint(endpoint: string): Endpoint {
-  const parts = endpoint.trim().split("/")
-  if (parts.length > 2) {
-    throw new Error("endpoint must have at most one '/' (format: 'name' or 'package/name')")
+  const value = endpoint.trim()
+  if (!ENDPOINT_PATTERN.test(value)) {
+    const suggestion = value
+      .split("/")
+      .map((segment) => segment.replace(/[_\s]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""))
+      .join("/")
+    const hint = suggestion !== value && ENDPOINT_PATTERN.test(suggestion) ? ` Did you mean '${suggestion}'?` : ""
+    throw new Error(`invalid endpoint '${value}'. ${ENDPOINT_FORMAT}${hint}`)
   }
+  const parts = value.split("/")
   const pkg = parts.length === 1 ? "v1" : parts[0]
   const name = parts.length === 1 ? parts[0] : parts[1]
   const dir = join("packages", pkg, name)
@@ -82,6 +96,19 @@ export function parseEndpoint(endpoint: string): Endpoint {
 /** A single MCP text tool result. */
 export function text(message: string) {
   return { content: [{ type: "text" as const, text: message }] }
+}
+
+/** A failed MCP tool result. Clients must not treat this as a completed call. */
+export function error(message: string) {
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: message }],
+  }
+}
+
+/** Convert the status string returned by shared helpers into an MCP result. */
+export function status(message: string) {
+  return message.startsWith("Error:") ? error(message) : text(message)
 }
 
 /**

@@ -15,12 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { parseEndpoint, injectConnector, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, injectConnector, error, status, defineTool, endpointArg } from "../lib.ts"
 
 export default defineTool({
   name: "action_add_s3",
   config: {
-    description: "Add S3 connection to an endpoint's context. Provides ctx.S3_CLIENT, ctx.S3_DATA, ctx.S3_WEB, ctx.S3_PUBLIC.",
+    description:
+      "Add a bucket-scoped S3 connection to an endpoint's context. Provides ctx.S3_CLIENT, ctx.S3_DATA, ctx.S3_WEB, ctx.S3_PUBLIC. Never call list_buckets; verify read/write with put_object, get_object plus content comparison, and delete_object in ctx.S3_DATA.",
     inputSchema: { endpoint: endpointArg },
   },
   handler({ endpoint }) {
@@ -28,7 +29,7 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
     const injection = `
 #--param S3_HOST "$S3_HOST"
@@ -53,14 +54,14 @@ def init_s3(args, ctx):
   ctx.S3_PUBLIC = args.get("S3_PUBLIC", os.getenv("OPSDEV_S3"))
 builder.append(init_s3)`
 
-    return text(
+    return status(
       injectConnector({
         endpoint: ep,
         label: "S3",
         guard: "init_s3",
         injection,
         available:
-          "  ctx.S3_CLIENT — the S3 client\n  ctx.S3_DATA — the S3 data bucket (private)\n  ctx.S3_WEB — the S3 web bucket (public)\n  ctx.S3_PUBLIC — the public URL to access S3",
+          "  ctx.S3_CLIENT — the bucket-scoped S3 client; never call list_buckets()\n  ctx.S3_DATA — the S3 data bucket (private)\n  ctx.S3_WEB — the S3 web bucket (public)\n  ctx.S3_PUBLIC — the public URL to access S3\n\nVerification contract:\n  Use ctx.S3_DATA with a unique temporary key. Call put_object, then get_object and compare the returned Body bytes, then delete_object in a finally block. Only report read/write success after the byte comparison succeeds. head_bucket or object/bucket listing proves neither read nor write access.",
       }),
     )
   },

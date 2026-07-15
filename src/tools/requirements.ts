@@ -18,15 +18,48 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { z } from "zod"
-import { parseEndpoint, text, defineTool, endpointArg } from "../lib.ts"
+import { parseEndpoint, error, status, defineTool, endpointArg } from "../lib.ts"
 
 const PREINSTALLED = [
-  "requests", "ollama", "openai", "pymilvus", "redis", "pyyaml", "boto3",
+  "requests", "ollama", "openai", "pymilvus", "pyyaml", "boto3",
   "psycopg", "beautifulsoup4", "pillow", "nltk", "httplib2", "kafka_python",
   "python-dateutil", "scrapy", "simplejson", "twisted", "netifaces", "pymongo",
   "minio", "langdetect", "plotly", "joblib", "lightgbm", "feedparser", "numpy",
   "scikit-learn", "langchain", "langchain-ollama", "langchain-openai", "bcrypt",
 ]
+
+export function ensurePythonRequirement(dir: string, library: string): string {
+  const lib = library.trim()
+  if (!lib) return "Error: library name cannot be empty"
+  if (!existsSync(dir)) return `Error: endpoint not found at ${dir}`
+
+  const normalizedLib = lib.toLowerCase().replace(/-/g, "_")
+  const isPreinstalled = PREINSTALLED.some(
+    (p) => p.toLowerCase().replace(/-/g, "_") === normalizedLib,
+  )
+  if (isPreinstalled) {
+    return `Library '${lib}' is preinstalled and available. No action needed.`
+  }
+
+  const reqPath = join(dir, "requirements.txt")
+  let existing = ""
+  if (existsSync(reqPath)) {
+    existing = readFileSync(reqPath, "utf-8")
+  }
+
+  const lines = existing.split("\n").map((l) => l.trim()).filter(Boolean)
+  const alreadyAdded = lines.some(
+    (l) => l.toLowerCase().replace(/-/g, "_") === normalizedLib,
+  )
+  if (alreadyAdded) {
+    return `Library '${lib}' is already in requirements.txt.`
+  }
+
+  lines.push(lib)
+  writeFileSync(reqPath, lines.join("\n") + "\n")
+
+  return `Added '${lib}' to ${reqPath}`
+}
 
 export default defineTool({
   name: "action_requirements",
@@ -42,40 +75,8 @@ export default defineTool({
     try {
       ep = parseEndpoint(endpoint)
     } catch (e) {
-      return text(`Error: ${(e as Error).message}`)
+      return error(`Error: ${(e as Error).message}`)
     }
-    const lib = library.trim()
-    const { dir } = ep
-
-    if (!existsSync(dir)) {
-      return text(`Error: endpoint not found at ${dir}`)
-    }
-
-    const normalizedLib = lib.toLowerCase().replace(/-/g, "_")
-    const isPreinstalled = PREINSTALLED.some(
-      (p) => p.toLowerCase().replace(/-/g, "_") === normalizedLib,
-    )
-    if (isPreinstalled) {
-      return text(`Library '${lib}' is preinstalled and available. No action needed.`)
-    }
-
-    const reqPath = join(dir, "requirements.txt")
-    let existing = ""
-    if (existsSync(reqPath)) {
-      existing = readFileSync(reqPath, "utf-8")
-    }
-
-    const lines = existing.split("\n").map((l) => l.trim()).filter(Boolean)
-    const alreadyAdded = lines.some(
-      (l) => l.toLowerCase().replace(/-/g, "_") === normalizedLib,
-    )
-    if (alreadyAdded) {
-      return text(`Library '${lib}' is already in requirements.txt.`)
-    }
-
-    lines.push(lib)
-    writeFileSync(reqPath, lines.join("\n") + "\n")
-
-    return text(`Added '${lib}' to ${reqPath}`)
+    return status(ensurePythonRequirement(ep.dir, library))
   },
 })
