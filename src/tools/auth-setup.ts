@@ -15,43 +15,90 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { z } from "zod"
-import { defineTool, endpointArg, error, text } from "../lib.ts"
-import { bindSecret, ensureEnvSecret, hasEnvSecret, normalizeSecretName } from "../secrets.ts"
+import { BUILD_CONTEXT_MARKER, defineTool, endpointArg, error, parseEndpoint, text } from "../lib.ts"
+import actionAddRedis from "./add-redis.ts"
+
+interface FileSnapshot {
+  path: string
+  existed: boolean
+  content: string
+}
+
+function snapshot(path: string): FileSnapshot {
+  return {
+    path,
+    existed: existsSync(path),
+    content: existsSync(path) ? readFileSync(path, "utf-8") : "",
+  }
+}
+
+function restore(files: FileSnapshot[]): void {
+  for (const file of files) {
+    if (file.existed) writeFileSync(file.path, file.content)
+    else rmSync(file.path, { force: true })
+  }
+}
 
 export default defineTool({
   name: "auth_setup",
   config: {
-    description: "Prepare one shared secret for token-issuing and protected endpoints. Optionally generates a missing secret without exposing it, then binds every endpoint atomically.",
+    description: "Atomically add Redis session wiring to the complete authentication surface: token issuers (login/registration), token validators (me/session and every protected resource), and logout. This tool never reads or writes .env. Generated auth must use bcrypt password verification plus a cryptographically random opaque token stored as a prefix-safe ctx.REDIS_PREFIX key with a bounded TTL; protected endpoints derive identity from Redis and logout deletes the record. JWT and application signing secrets are forbidden.",
     inputSchema: {
-      secret: z.string().describe("The exact application secret name (e.g. JWT_SECRET)"),
-      token_endpoints: z.array(endpointArg).min(1).describe("Endpoints that create or refresh authentication tokens, such as register and login"),
-      protected_endpoints: z.array(endpointArg).min(1).describe("Endpoints that validate authentication, including me/session and protected resources"),
-      generate_if_missing: z.boolean().optional().describe("Generate the secret in .env when absent. Defaults to false."),
+      token_endpoints: z.array(endpointArg).min(1).describe("All endpoints that issue an authenticated session, such as v1/login and v1/register"),
+      protected_endpoints: z.array(endpointArg).min(1).describe("The me/session endpoint and every endpoint that requires an authenticated identity"),
+      logout_endpoints: z.array(endpointArg).min(1).describe("All endpoints that revoke an authenticated session, normally v1/logout"),
     },
   },
-  handler({ secret, token_endpoints, protected_endpoints, generate_if_missing }) {
+  async handler({ token_endpoints, protected_endpoints, logout_endpoints }) {
+    const endpoints = [...new Set([...token_endpoints, ...protected_endpoints, ...logout_endpoints])]
+    const parsed: ReturnType<typeof parseEndpoint>[] = []
+
     try {
-      const name = normalizeSecretName(secret)
-      let created = false
-      if (!hasEnvSecret(name)) {
-        if (!generate_if_missing) {
-          return error(`Authentication setup failed: secret '${name}' is not configured in .env. Call secret_ensure after the exact name is authorized, then retry auth_setup. No endpoint was changed.`)
+      // WHY: validate the complete graph before writing anything. A missing
+      // protected endpoint must not leave only login wired, which would make
+      // the application appear authenticated while its backend is unusable.
+      for (const endpoint of endpoints) {
+        const action = parseEndpoint(endpoint)
+        if (!existsSync(action.mainPath)) {
+          return error(`Authentication setup failed: endpoint not found at ${action.mainPath}. No endpoint was changed.`)
         }
-        created = ensureEnvSecret(name).created
+        const wrapper = readFileSync(action.mainPath, "utf-8")
+        if (!wrapper.includes(BUILD_CONTEXT_MARKER)) {
+          return error(`Authentication setup failed: marker '${BUILD_CONTEXT_MARKER}' not found in ${action.mainPath}. No endpoint was changed.`)
+        }
+        parsed.push(action)
       }
 
-      const endpoints = [...new Set([...token_endpoints, ...protected_endpoints])]
-      const result = bindSecret(name, endpoints)
-      const lines = [
-        `Authentication secret '${name}' is ready for all ${endpoints.length} endpoints.`,
-        created ? "A new value was generated in .env and was not returned." : "The existing value was not read or returned.",
-      ]
-      if (result.configured.length > 0) lines.push(`Configured: ${result.configured.join(", ")}.`)
-      if (result.alreadyConfigured.length > 0) lines.push(`Already configured: ${result.alreadyConfigured.join(", ")}.`)
-      lines.push(`All token creation and validation code must use ctx.${name}; never os.getenv with a default or a hardcoded fallback.`)
-      lines.push("Registration must establish the same authenticated state as login. The frontend must validate persisted tokens through a protected me/session endpoint before rendering private pages.")
-      return text(lines.join("\n"))
+      const snapshots = parsed.flatMap((action) => [
+        snapshot(action.mainPath),
+        snapshot(join(action.dir, "requirements.txt")),
+      ])
+
+      try {
+        for (const endpoint of endpoints) {
+          const result = await actionAddRedis.handler({ endpoint })
+          if (result.isError) {
+            restore(snapshots)
+            const detail = result.content.map((part) => part.text).join("\n")
+            return error(`Authentication setup failed while wiring '${endpoint}': ${detail}. All endpoint files were restored.`)
+          }
+        }
+      } catch (cause) {
+        restore(snapshots)
+        throw cause
+      }
+
+      return text([
+        `Redis authentication wiring is ready for ${endpoints.length} endpoints: ${endpoints.join(", ")}.`,
+        "Token endpoints must verify password hashes with bcrypt, generate a cryptographically random opaque token, and store only a token-to-identity record in Redis with a bounded TTL.",
+        "Build keys without duplicate separators: append an app-local 'session:<token>' suffix to ctx.REDIS_PREFIX, adding ':' only when the configured prefix does not already end with it.",
+        "Protected endpoints must read the Bearer token, load the Redis record, derive user id and roles only from that record, and fail closed when it is absent or expired.",
+        "Logout endpoints must delete the same Redis record. The browser stores only the opaque token.",
+        "Do not use JWT, an application signing secret, browser-supplied user ids, or direct edits to generated __main__.py wrappers.",
+      ].join("\n"))
     } catch (cause) {
       return error(`Authentication setup failed: ${(cause as Error).message}`)
     }

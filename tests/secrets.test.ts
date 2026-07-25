@@ -16,7 +16,7 @@
 // under the License.
 
 import assert from "node:assert/strict"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -27,7 +27,6 @@ import actionNew from "../src/tools/new.ts"
 import { endpointArg, parseEndpoint } from "../src/lib.ts"
 import authSetup from "../src/tools/auth-setup.ts"
 import secretBind from "../src/tools/secret-bind.ts"
-import secretEnsure from "../src/tools/secret-ensure.ts"
 import secretUnbind from "../src/tools/secret-unbind.ts"
 
 function resultText(result: { content: { text: string }[] }): string {
@@ -59,28 +58,24 @@ function inTemporaryProject(run: () => void): void {
   }
 }
 
-test("secret_ensure creates an idempotent secret without returning its value", () => {
-  inTemporaryProject(() => {
-    const persistent = join(process.cwd(), "state", "secrets.env")
-    const previous = process.env.OPENSERVERLESS_SECRETS_FILE
-    process.env.OPENSERVERLESS_SECRETS_FILE = persistent
-    try {
-      const first = secretEnsure.handler({ secret: "JWT_SECRET", bytes: 32 })
-      assert.equal(first.isError, undefined)
-      const env = readFileSync(".env", "utf-8")
-      const value = env.trim().split("=", 2)[1]
-      assert.ok(value.length >= 43)
-      assert.equal(resultText(first).includes(value), false)
-      assert.equal(readFileSync(persistent, "utf-8"), env)
+async function inTemporaryProjectAsync(run: () => Promise<void>): Promise<void> {
+  const previous = process.cwd()
+  const directory = mkdtempSync(join(tmpdir(), "openserverless-mcp-test-"))
+  try {
+    process.chdir(directory)
+    await run()
+  } finally {
+    process.chdir(previous)
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
 
-      const second = secretEnsure.handler({ secret: "JWT_SECRET", bytes: 64 })
-      assert.equal(second.isError, undefined)
-      assert.equal(readFileSync(".env", "utf-8"), env)
-    } finally {
-      if (previous === undefined) delete process.env.OPENSERVERLESS_SECRETS_FILE
-      else process.env.OPENSERVERLESS_SECRETS_FILE = previous
-    }
-  })
+test("server surface omits env mutation while retaining Redis auth setup", () => {
+  const registry = readFileSync(new URL("../src/index.ts", import.meta.url), "utf-8")
+  assert.doesNotMatch(registry, /secret-ensure/)
+  assert.match(registry, /auth-setup/)
+  assert.equal(existsSync(new URL("../src/tools/secret-ensure.ts", import.meta.url)), false)
+  assert.equal(existsSync(new URL("../src/tools/auth-setup.ts", import.meta.url)), true)
 })
 
 test("action_add_secret reports a real MCP error when the secret is absent", () => {
@@ -106,9 +101,6 @@ test("secret tools reject Trustable-managed runtime variables", () => {
     assert.match(resultText(bind), /Trustable-managed runtime variable/)
     assert.equal(readFileSync("packages/v1/stack-status/__main__.py", "utf-8"), original)
 
-    const ensure = secretEnsure.handler({ secret: "OPS_APIHOST", bytes: 32 })
-    assert.equal(ensure.isError, true)
-    assert.match(resultText(ensure), /Trustable-managed runtime variable/)
     assert.equal(readFileSync(".env", "utf-8"), "OPS_APIHOST=http://miniops.me\n")
   })
 })
@@ -180,27 +172,7 @@ test("secret_bind validates every endpoint before changing any wrapper", () => {
     })
     assert.equal(repeated.isError, undefined)
     assert.match(resultText(repeated), /Already configured: v1\/login, v1\/me/)
-  })
-})
-
-test("auth_setup generates one undisclosed secret and binds token plus protected endpoints", () => {
-  inTemporaryProject(() => {
-    for (const name of ["register", "login", "me", "projects"]) endpoint(`v1/${name}`)
-
-    const result = authSetup.handler({
-      secret: "JWT_SECRET",
-      token_endpoints: ["v1/register", "v1/login"],
-      protected_endpoints: ["v1/me", "v1/projects"],
-      generate_if_missing: true,
-    })
-    assert.equal(result.isError, undefined)
-    const value = readFileSync(".env", "utf-8").trim().split("=", 2)[1]
-    assert.equal(resultText(result).includes(value), false)
-    assert.match(resultText(result), /All token creation and validation code must use ctx\.JWT_SECRET/)
-
-    for (const name of ["register", "login", "me", "projects"]) {
-      assert.match(readFileSync(`packages/v1/${name}/__main__.py`, "utf-8"), /#--param JWT_SECRET/)
-    }
+    assert.equal(readFileSync(".env", "utf-8"), "JWT_SECRET=not-returned\n")
   })
 })
 
@@ -222,11 +194,54 @@ test("action_add_redis installs its runtime dependency and migrates text respons
       readFileSync("packages/v1/cache/__main__.py", "utf-8"),
       /redis\.from_url\(.+decode_responses=True\)/,
     )
+    assert.match(resultText(first), /opaque token/i)
+    assert.match(resultText(first), /Do not use JWT/i)
 
     const repeated = actionAddRedis.handler({ endpoint: "v1/cache" })
     assert.equal(repeated.isError, undefined)
     assert.match(resultText(repeated), /already in requirements\.txt/)
     assert.equal(readFileSync("packages/v1/cache/requirements.txt", "utf-8"), "redis\n")
+  })
+})
+
+test("auth_setup atomically wires Redis to the complete authentication surface", async () => {
+  await inTemporaryProjectAsync(async () => {
+    for (const name of ["register", "login", "me", "employees", "logout"]) endpoint(`v1/${name}`)
+
+    const result = await authSetup.handler({
+      token_endpoints: ["v1/register", "v1/login"],
+      protected_endpoints: ["v1/me", "v1/employees"],
+      logout_endpoints: ["v1/logout"],
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.equal(existsSync(".env"), false)
+    assert.match(resultText(result), /bcrypt/)
+    assert.match(resultText(result), /duplicate separators/)
+    assert.match(resultText(result), /bounded TTL/)
+    assert.match(resultText(result), /Do not use JWT/)
+
+    for (const name of ["register", "login", "me", "employees", "logout"]) {
+      assert.match(readFileSync(`packages/v1/${name}/__main__.py`, "utf-8"), /def init_redis/)
+      assert.equal(readFileSync(`packages/v1/${name}/requirements.txt`, "utf-8"), "redis\n")
+    }
+  })
+})
+
+test("auth_setup leaves every endpoint untouched when preflight fails", async () => {
+  await inTemporaryProjectAsync(async () => {
+    const original = endpoint("v1/login")
+    const result = await authSetup.handler({
+      token_endpoints: ["v1/login"],
+      protected_endpoints: ["v1/missing"],
+      logout_endpoints: ["v1/logout"],
+    })
+
+    assert.equal(result.isError, true)
+    assert.match(resultText(result), /No endpoint was changed/)
+    assert.equal(readFileSync("packages/v1/login/__main__.py", "utf-8"), original)
+    assert.equal(existsSync("packages/v1/login/requirements.txt"), false)
+    assert.equal(existsSync(".env"), false)
   })
 })
 

@@ -25,7 +25,7 @@ const TEXT_CLIENT = 'redis.from_url(args.get("REDIS_URL", os.getenv("REDIS_URL")
 export default defineTool({
   name: "action_add_redis",
   config: {
-    description: "Add Redis connection to an endpoint's context. Provides ctx.REDIS and ctx.REDIS_PREFIX.",
+    description: "Add Redis to one endpoint as ctx.REDIS and ctx.REDIS_PREFIX. For authenticated pages, every login/registration, me/session, protected-resource, and logout endpoint must be wired; use auth_setup to configure the complete set atomically. Authentication uses opaque random tokens stored server-side in prefix-safe Redis keys with a bounded TTL, never JWT or an application signing secret.",
     inputSchema: { endpoint: endpointArg },
   },
   handler({ endpoint }) {
@@ -60,6 +60,11 @@ builder.append(init_redis)`
 
     const requirement = ensurePythonRequirement(ep.dir, "redis")
     if (requirement.startsWith("Error:")) return status(requirement)
-    return status(`${connector}\n${requirement}`)
+    // WHY: tool metadata is not always retained after discovery. Repeat the
+    // authentication invariant in the result so a successful connector call
+    // cannot be mistaken for a complete one-endpoint auth setup.
+    return status(`${connector}
+${requirement}
+Authentication contract: use auth_setup for the complete endpoint set. Store a cryptographically random opaque token as a prefix-safe ctx.REDIS_PREFIX session key with a bounded TTL; protected endpoints derive identity from that server-side record and logout deletes it. Do not use JWT or an application signing secret.`)
   },
 })

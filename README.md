@@ -13,13 +13,12 @@ Model Context Protocol so any MCP-capable agent can drive them.
 | `action_requirements` | Add a library to an endpoint's `requirements.txt` (skips preinstalled libs). |
 | `action_add_secret` | Wire a `.env` secret into an endpoint's context as `ctx.<SECRET>`. |
 | `secret_status` | Check secret presence and endpoint bindings without reading its value. |
-| `secret_ensure` | Generate a missing `.env` secret without returning its value. |
 | `secret_bind` | Atomically bind the same secret to multiple endpoints. |
 | `secret_unbind` | Atomically remove an obsolete generated binding without reading or deleting the secret. |
-| `auth_setup` | Prepare one shared secret for token-issuing and protected endpoints. |
+| `auth_setup` | Atomically wire Redis into all token-issuing, protected/session, and logout endpoints; never writes `.env` or configures JWT. |
 | `action_add_s3` | Add bucket-scoped S3 to an endpoint's context (`ctx.S3_CLIENT`, `ctx.S3_DATA`, `ctx.S3_WEB`, `ctx.S3_PUBLIC`); forbids `list_buckets` and requires `put_object` → `get_object`/compare → `delete_object` for read/write verification. |
 | `action_add_postgresql` | Add PostgreSQL (`ctx.POSTGRESQL`). |
-| `action_add_redis` | Add Redis (`ctx.REDIS`, `ctx.REDIS_PREFIX`) and its Python runtime dependency. |
+| `action_add_redis` | Add Redis (`ctx.REDIS`, `ctx.REDIS_PREFIX`) and its Python runtime dependency; use it for opaque authenticated sessions. |
 | `action_add_milvus` | Add Milvus vector DB (`ctx.MILVUS`). |
 | `action_add_mongodb` | Add MongoDB (`ctx.MONGODB_CLIENT`, `ctx.MONGODB`). |
 
@@ -34,15 +33,21 @@ reported as MCP errors.
 
 Secret values are never returned by these tools. Missing secrets and invalid
 endpoints are MCP errors (`isError: true`), so clients cannot mistake an
-incomplete authentication setup for a successful tool call. `action_add_secret`
-remains as the single-endpoint compatibility tool; use `secret_bind` or
-`auth_setup` when several actions must share one credential.
+incomplete binding for a successful tool call. `action_add_secret` remains as
+the single-endpoint compatibility tool; use `secret_bind` when several actions
+must share one user-configured credential.
 
-When `OPENSERVERLESS_SECRETS_FILE` is set, `secret_ensure` also synchronizes the
-requested name with that persistent env file. A value already present in the
-working `.env` is copied without being returned; a persisted value is restored
-to `.env` when needed. This lets hosts whose `.env` is generated keep app
-secrets outside the source checkout.
+Application `.env` and `.env.production` files are owned by Trustable's
+user-facing configuration flow. The MCP performs only value-free presence
+checks needed for binding validation and never creates, edits, imports,
+synchronizes, regenerates, or automatically populates those files. A missing
+variable must be added by the user through Trustable.
+
+Application authentication uses Redis-backed opaque sessions. Create login,
+registration, `me`/session, every protected endpoint, and logout, then call
+`auth_setup` once with those complete endpoint sets. Store token-to-identity
+mappings under keys derived from `ctx.REDIS_PREFIX` with a bounded TTL; never
+use JWT or an application signing secret as a substitute.
 
 ## Working directory
 
@@ -69,7 +74,6 @@ src/
     add-milvus.ts     action_add_milvus
     add-mongodb.ts    action_add_mongodb
     secret-status.ts  secret_status
-    secret-ensure.ts  secret_ensure
     secret-bind.ts    secret_bind
     secret-unbind.ts  secret_unbind
     auth-setup.ts     auth_setup

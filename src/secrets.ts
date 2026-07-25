@@ -15,9 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { randomBytes } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname } from "node:path"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { BUILD_CONTEXT_MARKER, parseEndpoint, type Endpoint } from "./lib.ts"
 
 const SECRET_NAME = /^[A-Z_][A-Z0-9_]*$/
@@ -42,11 +40,6 @@ export interface SecretBindingResult {
 export interface SecretUnbindingResult {
   removed: string[]
   alreadyAbsent: string[]
-}
-
-export interface EnsureEnvSecretResult {
-  created: boolean
-  persisted: boolean
 }
 
 function normalizeEnvName(secret: string): string {
@@ -80,55 +73,11 @@ function envValues(path: string): Map<string, string> {
   return values
 }
 
-function writeEnvValue(path: string, name: string, value: string): void {
-  const current = existsSync(path) ? readFileSync(path, "utf-8") : ""
-  const lines = current.split(/\r?\n/)
-  const assignment = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`)
-  let replaced = false
-  const next: string[] = []
-  for (const [index, line] of lines.entries()) {
-    if (!assignment.test(line)) {
-      if (index < lines.length - 1 || line !== "") next.push(line)
-      continue
-    }
-    if (!replaced) next.push(`${name}=${value}`)
-    replaced = true
-  }
-  if (!replaced) next.push(`${name}=${value}`)
-
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${next.join("\n")}\n`, { encoding: "utf-8", mode: 0o600 })
-}
-
-function persistentSecretsPath(): string | undefined {
-  const path = process.env.OPENSERVERLESS_SECRETS_FILE?.trim()
-  return path || undefined
-}
-
 export function hasEnvSecret(secret: string, path = ".env"): boolean {
   const name = normalizeSecretName(secret)
-  const local = envValues(path).get(name)
-  if (local) return true
-  const persistentPath = persistentSecretsPath()
-  return persistentPath ? Boolean(envValues(persistentPath).get(name)) : false
-}
-
-/**
- * Create an application-local secret without returning its value to the MCP
- * client. Existing values are never read back, changed, or exposed.
- */
-export function ensureEnvSecret(secret: string, bytes = 48, path = ".env"): EnsureEnvSecretResult {
-  const name = normalizeSecretName(secret)
-  const persistentPath = persistentSecretsPath()
-  const localValue = envValues(path).get(name)
-  const persistentValue = persistentPath ? envValues(persistentPath).get(name) : undefined
-  const created = !localValue && !persistentValue
-  const value = persistentValue || localValue || randomBytes(bytes).toString("base64url")
-
-  if (localValue !== value) writeEnvValue(path, name, value)
-  if (persistentPath && persistentValue !== value) writeEnvValue(persistentPath, name, value)
-
-  return { created, persisted: Boolean(persistentPath) }
+  // WHY: this is a value-free existence probe only. Environment mutation is
+  // reserved for the Trustable UI and is intentionally absent from this MCP.
+  return Boolean(envValues(path).get(name))
 }
 
 function secretInjection(secret: string): string {
