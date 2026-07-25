@@ -29,7 +29,6 @@ import actionAddPostgresql from "./tools/add-postgresql.ts"
 import actionAddRedis from "./tools/add-redis.ts"
 import actionAddMilvus from "./tools/add-milvus.ts"
 import actionAddMongodb from "./tools/add-mongodb.ts"
-import secretEnsure from "./tools/secret-ensure.ts"
 import secretStatus from "./tools/secret-status.ts"
 import secretBind from "./tools/secret-bind.ts"
 import secretUnbind from "./tools/secret-unbind.ts"
@@ -45,11 +44,13 @@ const tools: Tool[] = [
   actionAddRedis,
   actionAddMilvus,
   actionAddMongodb,
-  secretEnsure,
   secretStatus,
   secretBind,
   secretUnbind,
   authSetup,
+  // WHY: application env files are owned by Trustable's user-facing
+  // configuration flow. auth_setup wires Redis only; no registered tool
+  // generates values or writes .env behind the user's back.
 ]
 
 const server = new McpServer({

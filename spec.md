@@ -6,6 +6,9 @@ Rule: assume the packages referenced by the tools are already available and prei
 
 Rule: `action-add-secret`, `action-add-s3`, `action-add-redis`, `action-add-postgresql`, `action-add-milvus`, and `action-add-mongodb` are idempotent — if the secret or service is already present in `__main__.py`, skip the injection silently and return a message saying it is already configured.
 
+Rule: application authentication uses Redis-backed opaque sessions. It never
+uses JWT, an application signing secret, or an MCP-generated environment value.
+
 Implement the following tools in folder tools/ using this template:
 
 ```
@@ -139,17 +142,12 @@ Receive a secret name and an optional endpoint list. Report only whether the
 name exists in `.env` and whether each generated wrapper contains the matching
 parameter binding. Never read or return the value.
 
-# tool secret-ensure
-
-Receive an authorized exact secret name and optional random byte count. If the
-name is absent, append a cryptographically random base64url value to `.env`.
-If it already exists, leave it unchanged. Never return either an existing or a
-new value.
-
-When `OPENSERVERLESS_SECRETS_FILE` is configured, synchronize only the requested
-name with that persistent env file. Prefer an existing persistent value, copy an
-existing `.env` value into the persistent file when no persistent value exists,
-and generate only when both are absent.
+Application `.env` and `.env.production` files are owned exclusively by the
+Trustable user-facing configuration flow. This MCP may perform a value-free
+presence check needed to validate a binding, but it must not expose a tool that
+creates, edits, imports, synchronizes, regenerates, or automatically populates
+either file. Missing variables are MCP errors and must be reported to the user
+for configuration through Trustable.
 
 # tool secret-bind
 
@@ -163,23 +161,42 @@ some endpoints configured when validation fails.
 Receive one bound parameter name and a non-empty endpoint list. Validate every
 generated wrapper before changing anything, then atomically remove only the
 exact binding block produced by the secret tools. Do not read or delete the
-value from `.env` or the persistent secret store. The operation is idempotent
-and is the supported recovery path for legacy invalid bindings of
-Trustable-managed variables such as `OPS_APIHOST`. When a binding is removed,
-the tool must instruct the caller to recreate every changed endpoint with
-`ops ide undeploy <endpoint>` followed by `ops ide deploy <endpoint>`, because
-updating an existing OpenWhisk action without the parameter does not remove the
-previously deployed binding. `ops ide clean` is insufficient because it removes
-only local build artifacts.
+value from `.env`. The operation is idempotent and is the supported recovery
+path for legacy invalid bindings of Trustable-managed variables such as
+`OPS_APIHOST`. When a binding is removed, the tool must instruct the caller to
+recreate every changed endpoint with `ops ide undeploy <endpoint>` followed by
+`ops ide deploy <endpoint>`, because updating an existing OpenWhisk action
+without the parameter does not remove the previously deployed binding.
+`ops ide clean` is insufficient because it removes only local build artifacts.
 
 # tool auth-setup
 
-Receive a secret name, token-issuing endpoints, protected endpoints, and an
-optional `generate_if_missing` flag. Ensure every action that creates or
-validates authentication tokens receives the same secret. If generation is
-requested, create the value without exposing it. The returned contract must
-tell action code to use only `ctx.<SECRET>` and to fail closed instead of using
-an environment or hardcoded fallback.
+Receive three non-empty endpoint lists:
+
+- token endpoints that issue a session, such as login and registration;
+- protected endpoints that validate the session, including `me`/session and
+  every protected resource;
+- logout endpoints that revoke the session.
+
+Validate the complete endpoint set before changing any file, then atomically
+apply the same Redis connector as `action-add-redis` to every unique endpoint.
+If validation or writing fails, leave or restore every endpoint unchanged.
+This tool must never read or write `.env` or `.env.production`.
+
+The result instructs editable action modules to:
+
+- verify password hashes with bcrypt;
+- generate a cryptographically random opaque token;
+- build a Redis key from `ctx.REDIS_PREFIX` without adding a duplicate
+  separator, plus an app-local `session:<token>` suffix;
+- store a token-to-identity mapping with a bounded TTL;
+- derive identity and authorization only from that server-side record on every
+  protected request;
+- delete the record on logout;
+- return only the opaque token to the browser.
+
+JWT, application signing secrets, browser-supplied user identifiers, and direct
+generated-wrapper edits are forbidden alternatives.
 
 # MCP error semantics
 
@@ -272,6 +289,16 @@ default Python action runtime does not guarantee that client library. Repeated
 calls are idempotent and upgrade an existing generated Redis connector to
 `decode_responses=True` so action results contain JSON-safe strings rather than
 raw bytes.
+
+Authenticated application pages use Redis-backed opaque sessions. After every
+login, registration, `me`/session, protected-resource, and logout endpoint
+exists, the caller must use `auth-setup` once with the complete endpoint sets;
+use `action-add-redis` directly only for unrelated single-endpoint Redis use.
+Login or registration creates a cryptographically random opaque token and
+stores only its token-to-identity mapping in Redis with a bounded TTL. Every
+Redis key must be derived from `ctx.REDIS_PREFIX`; protected endpoints validate
+the record and derive identity from it, and logout deletes it. JWT and
+application signing secrets are not an alternative to this session contract.
 
 ## returns
 
