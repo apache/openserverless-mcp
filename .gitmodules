@@ -1,0 +1,24 @@
+[submodule "olaris"]
+	path = olaris
+	url = https://github.com/nuvolaris/bestia
+	branch = bestia
+[submodule "support"]
+	path = support
+	url = https://github.com/trustable-ai/.github
+        branch = main
+[submodule "skills"]
+	path = skills
+	url = https://github.com/trustable-ai/skills
+        branch = main
+[submodule "olaris-bestia"]
+	path = olaris-bestia
+	url = https://github.com/trustable-ai/olaris-bestia
+        branch = main
+[submodule "mcp"]
+	path = mcp
+	url = https://github.com/apache/openserverless-mcp.git
+        branch = main
+[submodule "trustable-acp"]
+	path = trustable-acp
+	url = https://github.com/trustable-ai/trustable-acp.git
+	branch = main
