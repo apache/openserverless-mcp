@@ -43,10 +43,14 @@ export default defineTool({
 
     const isPublic = isPublicArg !== false
     const moduleName = name.replace(/-/g, "_")
+    const modulePath = join(dir, `${moduleName}.py`)
 
     if (existsSync(dir)) {
       if (!existsSync(ep.mainPath)) {
         return error(`Error: path already exists at ${dir}, but it is not a valid endpoint (__main__.py is missing)`)
+      }
+      if (!existsSync(modulePath)) {
+        return error(`Error: path already exists at ${dir}, but it is not a valid endpoint (module file ${moduleName}.py is missing)`)
       }
 
       const existingMain = readFileSync(ep.mainPath, "utf-8")
@@ -92,7 +96,7 @@ def main(args):
 `
 
     writeFileSync(join(dir, "__main__.py"), mainPy)
-    writeFileSync(join(dir, `${moduleName}.py`), modulePy)
+    writeFileSync(modulePath, modulePy)
 
     return text(`Created endpoint at /api/my/${pkg}/${name}\nFiles:\n  ${dir}/__main__.py\n  ${dir}/${moduleName}.py`)
   },
