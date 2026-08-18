@@ -9,7 +9,7 @@ Model Context Protocol so any MCP-capable agent can drive them.
 | Tool | Description |
 |---|---|
 | `action_new` | Idempotently create an API endpoint (`__main__.py` + module file). `public` defaults to true. |
-| `action_invoke` | Run `ops action invoke <endpoint>` with `key=value` params. |
+| `action_invoke` | Run `ops invoke <endpoint>` with `key=value` params and return the JSON result. |
 | `action_requirements` | Add a library to an endpoint's `requirements.txt` (skips preinstalled libs). |
 | `action_add_secret` | Wire a `.env` secret into an endpoint's context as `ctx.<SECRET>`. |
 | `secret_status` | Check secret presence and endpoint bindings without reading its value. |
