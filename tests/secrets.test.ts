@@ -304,6 +304,12 @@ test("action_new reports incompatible existing paths as MCP errors", () => {
     assert.equal(incomplete.isError, true)
     assert.match(resultText(incomplete), /not a valid endpoint/)
 
+    actionNew.handler({ endpoint: "v1/missing-module", public: true })
+    rmSync("packages/v1/missing-module/missing_module.py")
+    const missingModule = actionNew.handler({ endpoint: "v1/missing-module", public: true })
+    assert.equal(missingModule.isError, true)
+    assert.match(resultText(missingModule), /module file missing_module\.py is missing/)
+
     actionNew.handler({ endpoint: "v1/private-action", public: false })
     const visibilityConflict = actionNew.handler({ endpoint: "v1/private-action", public: true })
     assert.equal(visibilityConflict.isError, true)
