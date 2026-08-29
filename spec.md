@@ -95,7 +95,7 @@ Receive an <endpoint> (`package/action`) and a series of key=value pairs.
 
 ## executes
 
-the command `ops action invoke <endpoint> -p "<key1>" "<value1>" ... -p "<keyn>" "<valuen>"`
+the command `ops invoke <endpoint> -p "<key1>" "<value1>" ... -p "<keyn>" "<valuen>"`
 
 ## returns
 

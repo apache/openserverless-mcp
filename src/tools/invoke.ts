@@ -22,7 +22,7 @@ import { error, text, defineTool } from "../lib.ts"
 export default defineTool({
   name: "action_invoke",
   config: {
-    description: "Invoke an API action. Executes `ops action invoke` with the given endpoint and key=value parameters.",
+    description: "Invoke an API action and return its JSON result. Executes `ops invoke` with the given endpoint and key=value parameters.",
     inputSchema: {
       endpoint: z.string().describe("The endpoint path: 'package/action'"),
       params: z
@@ -43,7 +43,7 @@ export default defineTool({
       }
     }
 
-    const argv = ["action", "invoke", endpoint.trim(), ...paramArgs]
+    const argv = ["invoke", endpoint.trim(), ...paramArgs]
 
     const { stdout, stderr, exitCode } = await new Promise<{
       stdout: string
@@ -62,6 +62,6 @@ export default defineTool({
     if (exitCode !== 0) result += `\nExit code: ${exitCode}`
     return exitCode === 0
       ? text(result || "(no output)")
-      : error(result || `ops action invoke failed with exit code ${exitCode}`)
+      : error(result || `ops invoke failed with exit code ${exitCode}`)
   },
 })
