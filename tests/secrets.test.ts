@@ -88,7 +88,7 @@ test("action_add_secret reports a real MCP error when the secret is absent", () 
   })
 })
 
-test("secret tools reject Trustable-managed runtime variables", () => {
+test("secret tools reject Trustant-managed runtime variables", () => {
   inTemporaryProject(() => {
     writeFileSync(".env", "OPS_APIHOST=http://miniops.me\n")
     const original = endpoint("v1/stack-status")
@@ -98,7 +98,7 @@ test("secret tools reject Trustable-managed runtime variables", () => {
       secret: "OPS_APIHOST",
     })
     assert.equal(bind.isError, true)
-    assert.match(resultText(bind), /Trustable-managed runtime variable/)
+    assert.match(resultText(bind), /Trustant-managed runtime variable/)
     assert.equal(readFileSync("packages/v1/stack-status/__main__.py", "utf-8"), original)
 
     assert.equal(readFileSync(".env", "utf-8"), "OPS_APIHOST=http://miniops.me\n")

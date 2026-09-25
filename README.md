@@ -37,11 +37,11 @@ incomplete binding for a successful tool call. `action_add_secret` remains as
 the single-endpoint compatibility tool; use `secret_bind` when several actions
 must share one user-configured credential.
 
-Application `.env` and `.env.production` files are owned by Trustable's
+Application `.env` and `.env.production` files are owned by Trustant's
 user-facing configuration flow. The MCP performs only value-free presence
 checks needed for binding validation and never creates, edits, imports,
 synchronizes, regenerates, or automatically populates those files. A missing
-variable must be added by the user through Trustable.
+variable must be added by the user through Trustant.
 
 Application authentication uses Redis-backed opaque sessions. Create login,
 registration, `me`/session, every protected endpoint, and logout, then call

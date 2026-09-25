@@ -48,7 +48,7 @@ const tools: Tool[] = [
   secretBind,
   secretUnbind,
   authSetup,
-  // WHY: application env files are owned by Trustable's user-facing
+  // WHY: application env files are owned by Trustant's user-facing
   // configuration flow. auth_setup wires Redis only; no registered tool
   // generates values or writes .env behind the user's back.
 ]

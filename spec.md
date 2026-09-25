@@ -114,11 +114,11 @@ This tool adds a new secret <MY_SECRET> to an endpoint/action/function.
 First checks the secret is available in `.env`. If it is absent, return an MCP
 error with `isError: true` and do not modify the endpoint.
 
-Trustable-managed runtime variables are not application secrets and must be
+Trustant-managed runtime variables are not application secrets and must be
 rejected even when they exist in `.env`: `OPS_USER`, `OPS_PASSWORD`,
 `OPS_APIHOST`, `OPS_REPO`, and `OPS_SKILLS`. In particular, the tool must never
 generate `#--param OPS_APIHOST "$OPS_APIHOST"`; `OPS_APIHOST` belongs to the
-Trustable/`ops ide` orchestration process, not to action runtime context.
+Trustant/`ops ide` orchestration process, not to action runtime context.
 
 - adds in `__main__.py` after "## build-context ##":
 
@@ -143,11 +143,11 @@ name exists in `.env` and whether each generated wrapper contains the matching
 parameter binding. Never read or return the value.
 
 Application `.env` and `.env.production` files are owned exclusively by the
-Trustable user-facing configuration flow. This MCP may perform a value-free
+Trustant user-facing configuration flow. This MCP may perform a value-free
 presence check needed to validate a binding, but it must not expose a tool that
 creates, edits, imports, synchronizes, regenerates, or automatically populates
 either file. Missing variables are MCP errors and must be reported to the user
-for configuration through Trustable.
+for configuration through Trustant.
 
 # tool secret-bind
 
@@ -162,7 +162,7 @@ Receive one bound parameter name and a non-empty endpoint list. Validate every
 generated wrapper before changing anything, then atomically remove only the
 exact binding block produced by the secret tools. Do not read or delete the
 value from `.env`. The operation is idempotent and is the supported recovery
-path for legacy invalid bindings of Trustable-managed variables such as
+path for legacy invalid bindings of Trustant-managed variables such as
 `OPS_APIHOST`. When a binding is removed, the tool must instruct the caller to
 recreate every changed endpoint with `ops ide undeploy <endpoint>` followed by
 `ops ide deploy <endpoint>`, because updating an existing OpenWhisk action
